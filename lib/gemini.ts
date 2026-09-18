@@ -1,9 +1,23 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import {
+  GoogleGenAI,
+  PartMediaResolutionLevel,
+  ThinkingLevel,
+  Type,
+} from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+// Tek model yetmiyor: biri kotayı doldurunca (429) ya da yoğunken (503) diğerine geç.
+// GEMINI_MODEL virgülle birden fazla model alır, sırayla denenir.
+const MODELLER = (
+  process.env.GEMINI_MODEL ??
+  "gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite"
+)
+  .split(",")
+  .map((m) => m.trim())
+  .filter(Boolean);
 
 export type RafUrunu = {
+  raf: number;
   ad: string;
   marka: string;
   adet: number;
@@ -11,15 +25,26 @@ export type RafUrunu = {
   not: string;
 };
 
-const PROMPT = `Sen bir market rafı sayım asistanısın. Görseldeki raf ürünlerini listele.
+const PROMPT = `Sen bir market rafı sayım asistanısın. Görseldeki ürünleri raf raf sayarsın.
+
+ÖNEMLİ: Önce say, sonra tanı. Bunlar iki ayrı iş ve sırası şu:
+
+1. Adım - SAYMA (yazıları okumaya çalışma):
+- Görseldeki raf katlarını bul. En üstteki kat 1'dir, aşağı doğru artar. Kat ayrımı yapamıyorsan hepsine 1 yaz.
+- Her katı soldan sağa tara ve o katta duran her cismi tek tek say. Bir katı bitirmeden diğerine geçme.
+- Karanlıkta kalan, üzerinde parlama/yansıma olan, gölgedeki, bulanık çıkan ürünler de bu sayıma DAHİL. Ne olduğunu anlayamaman onu saymamak için sebep değil; orada bir şey duruyorsa sayarsın.
+- Kenarda yarısı kadraj dışında kalan ürünler de sayılır.
+- Bu adımda bulduğun toplam, cevabındaki toplam adede eşit olmalı. Hiçbirini eleme.
+
+2. Adım - TANIMA:
+- Ambalajdaki yazıyı okuyabiliyorsan ürün adını ve markayı ambalajdaki gibi yaz (gramaj görünüyorsa ekle).
+- Okuyamadığın ürünleri ELEME. Onlara ad olarak "bilinmeyen" yaz, marka olarak "bilinmeyen" yaz, emin_mi alanını "dusuk" yap ve not alanında neden okuyamadığını + görünüşünü yaz ("koyu renkli şişe, üzerinde parlama var, katın sağ ucunda" gibi).
+- Aynı katta, aynı görünen ürünleri tek satırda topla. Aynı ürün iki farklı kattaysa iki ayrı satır olur.
 
 Kurallar:
-- Sadece fotoğrafta GÖRÜNEN ürünleri say. Arkada olabilecek ürünleri tahmin etme.
-- Aynı ürünün tüm görünen adetlerini tek satırda topla.
-- Ambalajdaki yazıyı okuyabiliyorsan ürün adını ve markayı ambalajdaki gibi yaz (gramaj görünüyorsa ekle).
-- Okuyamadığın ürünler için ad alanına "bilinmeyen" yaz, not alanında görünüşünü kısaca tarif et.
-- Adetten emin değilsen emin_mi alanını "dusuk" yap. Asla sayı uydurma.
-- Raf dışındaki nesneleri (fiyat etiketi, insan, sepet) sayma.`;
+- Adetleri tek tek say, "yaklaşık şu kadar var" diye göz kararı yuvarlama yapma.
+- Arkada, önündeki ürünün gerisinde kalıp hiç görünmeyen ürünleri sayma; sadece gördüğün yüzleri say.
+- Raf dışındaki nesneleri (fiyat etiketi, insan, sepet, zemin) sayma.`;
 
 const SCHEMA = {
   type: Type.OBJECT,
@@ -29,38 +54,110 @@ const SCHEMA = {
       items: {
         type: Type.OBJECT,
         properties: {
+          raf: { type: Type.INTEGER },
           ad: { type: Type.STRING },
           marka: { type: Type.STRING },
           adet: { type: Type.INTEGER },
           emin_mi: { type: Type.STRING, enum: ["yuksek", "orta", "dusuk"] },
           not: { type: Type.STRING },
         },
-        required: ["ad", "marka", "adet", "emin_mi", "not"],
+        required: ["raf", "ad", "marka", "adet", "emin_mi", "not"],
       },
     },
   },
   required: ["urunler"],
 };
 
-export async function rafiAnalizEt(
-  base64: string,
-  mimeType: string
-): Promise<RafUrunu[]> {
-  const res = await ai.models.generateContent({
-    model: MODEL,
+// Gemini'nin hata gövdesindeki JSON'u çıkar (SDK mesajın önüne metin ekleyebiliyor)
+function hataGovdesi(e: unknown): { code?: number; message?: string } | null {
+  const ham = e instanceof Error ? e.message : String(e);
+  const bas = ham.indexOf("{");
+  if (bas === -1) return null;
+  try {
+    return JSON.parse(ham.slice(bas)).error ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Kullanıcıya ham JSON yerine tek cümlelik hata dön
+function anlasilirHata(e: unknown): Error {
+  const govde = hataGovdesi(e);
+  if (govde?.code === 429) {
+    const saniye = /retry in ([\d.]+)s/i.exec(govde.message ?? "")?.[1];
+    return new Error(
+      `Gemini kotası doldu (ücretsiz katmanda model başına günde 20 istek).` +
+        (saniye ? ` ${Math.ceil(Number(saniye))} sn sonra tekrar dene.` : "") +
+        ` Başka bir model denemek için .env.local içindeki GEMINI_MODEL'i değiştirebilirsin.`,
+    );
+  }
+  if (govde?.code === 503)
+    return new Error("Gemini şu an yoğun, birazdan tekrar dene.");
+  if (govde?.message) return new Error(govde.message);
+  return e instanceof Error ? e : new Error(String(e));
+}
+
+// 503 geçici yoğunluk, tekrar denemeye değer.
+// 429 kota hatası: tekrar denemek kotayı boşa harcar, hemen bırak.
+async function tekrarDene<T>(is_: () => Promise<T>, deneme = 2): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await is_();
+    } catch (e) {
+      const gecici = hataGovdesi(e)?.code === 503;
+      if (!gecici || i >= deneme) throw e;
+      await new Promise((r) => setTimeout(r, i * 2000));
+    }
+  }
+}
+
+function istek(base64: string, mimeType: string, model: string) {
+  return ai.models.generateContent({
+    model,
     contents: [
       {
         role: "user",
-        parts: [{ inlineData: { mimeType, data: base64 } }, { text: PROMPT }],
+        parts: [
+          {
+            inlineData: { mimeType, data: base64 },
+            // küçük ürünlerin okunabilmesi için en yüksek çözünürlükte işle
+            mediaResolution: {
+              level: PartMediaResolutionLevel.MEDIA_RESOLUTION_ULTRA_HIGH,
+            },
+          },
+          { text: PROMPT },
+        ],
       },
     ],
     config: {
       responseMimeType: "application/json",
       responseSchema: SCHEMA,
       temperature: 0, // aynı fotoğrafa tutarlı cevap için
+      // sayım işi tek bakışta çözülmüyor, modele düşünme payı bırak
+      thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
     },
   });
+}
 
-  const json = JSON.parse(res.text ?? "{}");
-  return json.urunler ?? [];
+export async function rafiAnalizEt(
+  base64: string,
+  mimeType: string,
+): Promise<RafUrunu[]> {
+  let sonHata: unknown;
+
+  for (const model of MODELLER) {
+    try {
+      const res = await tekrarDene(() => istek(base64, mimeType, model));
+      const json = JSON.parse(res.text ?? "{}");
+      return json.urunler ?? [];
+    } catch (e) {
+      const kod = hataGovdesi(e)?.code;
+      // kota dolu ya da model yogun: sıradaki modeli dene.
+      // diğer hatalar (geçersiz anahtar, bozuk istek) model değiştirmekle geçmez
+      if (kod !== 429 && kod !== 503) throw anlasilirHata(e);
+      sonHata = e;
+    }
+  }
+
+  throw anlasilirHata(sonHata);
 }

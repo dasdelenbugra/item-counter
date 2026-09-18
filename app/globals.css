@@ -68,10 +68,104 @@ button:disabled {
   cursor: default;
 }
 
-input[type="file"] {
+.gizli {
+  display: none;
+}
+
+.dugmeler {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ikincil {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--line);
+}
+
+.bilgi {
+  margin: 0.75rem 0 0;
+  font-size: 13px;
+}
+
+/* Kutu bindirmesi: görsel ve kutular aynı kutunun içinde durmalı ki
+   yüzde koordinatlar görselin kendisine göre hesaplansın. */
+.sarmal {
+  position: relative;
   display: block;
-  margin-bottom: 0.9rem;
-  max-width: 100%;
+  line-height: 0;
+  margin-top: 0.75rem;
+}
+
+.sarmal .onizleme {
+  margin-top: 0;
+}
+
+/* İnce çizgi kalabalık raf fotoğrafının üstünde kayboluyor: dolgu + koyu
+   dış gölge, kutuyu hem aydınlık hem karanlık ambalajda okunur kılıyor. */
+.kutu {
+  position: absolute;
+  border: 2px solid #ffd21e;
+  border-radius: 2px;
+  background: rgb(255 210 30 / 0.16);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.55);
+  pointer-events: none;
+}
+
+.kutu.bos {
+  border-color: #ff5a3d;
+  border-style: dashed;
+  background: rgb(255 90 61 / 0.16);
+}
+
+/* İki modelin sayısı yan yana: sunumda asıl gösterilecek şey bu. */
+.sayilar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.sayilar > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.rakam {
+  font-size: 1.9rem;
+  font-weight: 650;
+  line-height: 1.1;
+}
+
+.etiket {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.25rem;
+}
+
+.rozet {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.rozet.uyari {
+  border-color: #e0553f;
+  color: #e0553f;
+}
+
+.eksi {
+  color: #e0553f;
 }
 
 table {
