@@ -1,6 +1,6 @@
 ---
 title: Raf Sayim YOLO
-emoji: "\U0001F4E6"
+emoji: 📦
 colorFrom: green
 colorTo: gray
 sdk: docker
