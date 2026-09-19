@@ -23,12 +23,15 @@ const MODELLER = (process.env.GEMINI_MODEL?.trim() || VARSAYILAN_MODELLER)
 // Düşünme seviyesi süreyi doğrudan belirliyor ve Vercel isteği 60 saniyede
 // kesiyor. Aynı kahve reyonu fotoğrafında ölçüm:
 //   HIGH   : 42-45 sn -> bir kez 61 sn'ye çıktı ve 504 yedik
-//   MEDIUM : 38.2 sn  -> sadece 5 sn kazandırıyor, pay hâlâ dar
-//   LOW    : 13.8 sn  -> güvenli
-// Sayma işini artık YOLO yaptığı için Gemini'nin tek işi ürünü tanımak; o iş
-// HIGH gerektirmiyor. Bedeli: adlar daha genel ("Cam Kavanoz" yerine "Kahve")
-// ve gramaj bilgisi zayıflıyor. Kesilen istek buna göre çok daha kötü.
-// Daha zengin ad isteniyorsa GEMINI_THINKING=MEDIUM ile geri alınabilir.
+//   MEDIUM : 11-38 sn  -> en kötü ölçümde bile 22 sn pay kalıyor
+//   LOW    : 9-14 sn   -> hızlı ama MARKALARI KARIŞTIRIYOR
+//
+// LOW denendi ve gerçek telefonla test edilince elendi: Nescafe Gold'a
+// "Tchibo Gold", Migros'un kendi filtre kahvesine "Tchibo" dedi. Marka
+// karıştırmak, müşteri önünde genel isim yazmaktan çok daha kötü.
+// MEDIUM aynı fotoğrafta "Nescafe Gold 100g" diyor ve tanıyamadığına
+// uydurmak yerine "bilinmeyen" yazıyor.
+// Sayma işi zaten YOLO'da; buradaki seviye yalnızca tanımayı etkiliyor.
 const DUSUNME_SEVIYELERI: Record<string, ThinkingLevel> = {
   LOW: ThinkingLevel.LOW,
   MEDIUM: ThinkingLevel.MEDIUM,
@@ -36,7 +39,7 @@ const DUSUNME_SEVIYELERI: Record<string, ThinkingLevel> = {
 };
 const DUSUNME =
   DUSUNME_SEVIYELERI[process.env.GEMINI_THINKING?.trim().toUpperCase() ?? ""] ??
-  ThinkingLevel.LOW;
+  ThinkingLevel.MEDIUM;
 
 export type RafUrunu = {
   raf: number;

@@ -25,7 +25,7 @@ console.log(
       toplam: urunler.reduce((t, u) => t + u.adet, 0),
       satir: urunler.length,
       bilinmeyen: urunler.filter((u) => u.ad.toLowerCase().includes("bilinmeyen")).length,
-      ornekler: urunler.slice(0, 6).map((u) => `${u.marka} ${u.ad} x${u.adet}`),
+      hepsi: urunler.map((u) => `raf${u.raf} | ${u.marka} | ${u.ad} x${u.adet}`),
     },
     null,
     1,
