@@ -25,7 +25,10 @@ export type YoloSonuc = {
   sure_ms: number;
 };
 
-const SERVIS = process.env.YOLO_URL;
+// trim() şart: ortam değişkenine komut satırından yazarken sonuna satır sonu
+// takılabiliyor ve "Invalid URL" hatasına dönüşüyor (üretimde bu yaşandı).
+// Sondaki / de temizleniyor, yoksa "//say" gibi bir yol oluşuyor.
+const SERVIS = process.env.YOLO_URL?.trim().replace(/\/+$/, "") || undefined;
 
 // Hugging Face Spaces bedava katmanda uyuyor; ilk istek konteyneri uyandırır.
 const ZAMAN_ASIMI_MS = 45_000;
@@ -37,10 +40,19 @@ export function yoloVarMi(): boolean {
 export async function yoloylaSay(foto: Blob, ad: string): Promise<YoloSonuc> {
   if (!SERVIS) throw new Error("YOLO_URL tanımlı değil");
 
+  // Bozuk adresi genel "Invalid URL" yerine anlaşılır biçimde söyle:
+  // tünel adresi elle girildiği için yazım hatası olası bir senaryo.
+  let hedef: URL;
+  try {
+    hedef = new URL("/say", SERVIS);
+  } catch {
+    throw new Error(`YOLO_URL geçersiz: "${SERVIS}" (https:// ile başlamalı)`);
+  }
+
   const form = new FormData();
   form.append("foto", foto, ad);
 
-  const res = await fetch(new URL("/say", SERVIS), {
+  const res = await fetch(hedef, {
     method: "POST",
     body: form,
     signal: AbortSignal.timeout(ZAMAN_ASIMI_MS),
