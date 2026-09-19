@@ -20,6 +20,24 @@ const MODELLER = (process.env.GEMINI_MODEL?.trim() || VARSAYILAN_MODELLER)
   .map((m) => m.trim())
   .filter(Boolean);
 
+// Düşünme seviyesi süreyi doğrudan belirliyor ve Vercel isteği 60 saniyede
+// kesiyor. Aynı kahve reyonu fotoğrafında ölçüm:
+//   HIGH   : 42-45 sn -> bir kez 61 sn'ye çıktı ve 504 yedik
+//   MEDIUM : 38.2 sn  -> sadece 5 sn kazandırıyor, pay hâlâ dar
+//   LOW    : 13.8 sn  -> güvenli
+// Sayma işini artık YOLO yaptığı için Gemini'nin tek işi ürünü tanımak; o iş
+// HIGH gerektirmiyor. Bedeli: adlar daha genel ("Cam Kavanoz" yerine "Kahve")
+// ve gramaj bilgisi zayıflıyor. Kesilen istek buna göre çok daha kötü.
+// Daha zengin ad isteniyorsa GEMINI_THINKING=MEDIUM ile geri alınabilir.
+const DUSUNME_SEVIYELERI: Record<string, ThinkingLevel> = {
+  LOW: ThinkingLevel.LOW,
+  MEDIUM: ThinkingLevel.MEDIUM,
+  HIGH: ThinkingLevel.HIGH,
+};
+const DUSUNME =
+  DUSUNME_SEVIYELERI[process.env.GEMINI_THINKING?.trim().toUpperCase() ?? ""] ??
+  ThinkingLevel.LOW;
+
 export type RafUrunu = {
   raf: number;
   ad: string;
@@ -137,8 +155,7 @@ function istek(base64: string, mimeType: string, model: string) {
       responseMimeType: "application/json",
       responseSchema: SCHEMA,
       temperature: 0, // aynı fotoğrafa tutarlı cevap için
-      // sayım işi tek bakışta çözülmüyor, modele düşünme payı bırak
-      thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+      thinkingConfig: { thinkingLevel: DUSUNME },
     },
   });
 }

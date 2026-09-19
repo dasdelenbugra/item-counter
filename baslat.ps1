@@ -4,10 +4,14 @@
 #   1. YOLO servisi (uvicorn, port 7860)
 #   2. Cloudflare tuneli (servisi internete acar)
 #
-# Tunel her yeniden baslatildiginda ADRES DEGISIR. Betik yeni adresi ekrana
-# yazar; onu Vercel'deki YOLO_URL degiskenine yapistirip yeniden yayinla.
+# Tunel her yeniden baslatildiginda ADRES DEGISIR. Betik yeni adresi bulur,
+# Vercel'deki YOLO_URL degiskenine yazar ve yeniden yayinlar.
 #
-# Kullanim: PowerShell'de bu klasorde ->  .\baslat.ps1
+# Kullanim:
+#   .\baslat.ps1          -> hepsini yap (PC kapandiktan sonra bunu calistir)
+#   .\baslat.ps1 -Atla    -> Vercel'e dokunma, sadece yerelde calistir
+
+param([switch]$Atla)
 
 $ErrorActionPreference = "Stop"
 $kok = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -112,12 +116,52 @@ if ($calisiyor) {
 Write-Host ""
 Yaz " YOLO_URL = $adres" Yellow
 Write-Host ""
-Yaz " Bunu Vercel'e gir:" White
-Yaz "   Proje > Settings > Environment Variables > YOLO_URL" White
-Yaz "   Sonra Deployments > en ustteki > ... > Redeploy" White
+Set-Clipboard -Value $adres -ErrorAction SilentlyContinue
+
+# --- 4) Vercel'i yeni adresle guncelle --------------------------------------
+#
+# Ucretsiz tunelde adres her baslatmada degisiyor ve Vercel degiskenleri yayin
+# aninda sabitliyor: degiskeni degistirmek TEK BASINA yetmiyor, yeniden
+# yayinlamak da gerekiyor. Bu yuzden ikisini birlikte yapiyoruz.
+if ($Atla) {
+    Yaz " Vercel guncellemesi atlandi (-Atla verildi)." DarkGray
+    Yaz " Adresi elle gir: Settings > Environment Variables > YOLO_URL, sonra Redeploy." White
+} elseif (-not (Test-Path (Join-Path $kok ".vercel\project.json"))) {
+    Yaz " Vercel projesi bagli degil. Once: npx vercel link" Yellow
+    Yaz " Sonra adresi elle gir ve yeniden yayinla." White
+} else {
+    Yaz "Vercel guncelleniyor..." Cyan
+
+    # npx bilgi satirlarini stderr'e yaziyor; "Stop" modunda PowerShell bunu
+    # hata sanip betigi dusuruyor. Bu blok boyunca gevsetiyoruz ve basariyi
+    # ciktiya degil $LASTEXITCODE'a bakarak anliyoruz.
+    $eskiTercih = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        # Ayni isimde ikinci degisken eklenemiyor, once eskisini sil.
+        # Degisken yoksa hata verir, onemli degil.
+        npx --yes vercel env rm YOLO_URL production --yes *> $null
+
+        $adres | npx --yes vercel env add YOLO_URL production *> $null
+        if ($LASTEXITCODE -ne 0) { throw "YOLO_URL degiskeni yazilamadi" }
+
+        Yaz "Yeniden yayinlaniyor (40-60 sn)..." Cyan
+        $cikti = (npx --yes vercel deploy --prod --yes 2>&1 | Out-String)
+        if ($LASTEXITCODE -ne 0) { throw "yayin basarisiz" }
+
+        Yaz "Vercel guncellendi." Green
+    } catch {
+        Yaz " Vercel guncellenemedi: $($_.Exception.Message)" Red
+        Yaz " Adresi elle gir: Settings > Environment Variables > YOLO_URL, sonra Redeploy." White
+    } finally {
+        $ErrorActionPreference = $eskiTercih
+    }
+}
+
+Write-Host ""
+Yaz " Uygulama: https://item-counter-jade.vercel.app" Green
+Yaz " (icinde karisik kod olan adresleri kullanma, onlar eski yayina sabit)" DarkGray
 Write-Host ""
 Yaz " Acilan iki pencereyi KAPATMA. Kapanirsa kutular gelmez." Red
+Yaz " PC'yi uyutma: Ayarlar > Sistem > Guc ve pil > Uyku = Hicbir zaman" Red
 Write-Host ""
-
-Set-Clipboard -Value $adres -ErrorAction SilentlyContinue
-Yaz " (adres panoya kopyalandi)" DarkGray
