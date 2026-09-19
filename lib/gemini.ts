@@ -7,7 +7,14 @@ import {
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
-const VARSAYILAN_MODELLER = "gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite";
+// Sira KOTAYA gore: ucretsiz katmanda model basina gunde 20 istek var ve
+// dolan modelde istek 429 ile dusuyor, sadece zaman kaybettiriyor.
+// 2026-09-19'da 3.6 (31/20) ve 3.5 (30/20) dolmustu; her istek once o ikisinde
+// bosa gidip en zayif modele (flash-lite) dusuyordu. Yavaslik ve bozuk urun
+// adlarinin sebebi ayarlar degil buydu.
+// flash-lite en sona: kotasi genis (gunde 500) ama tanima kalitesi dusuk.
+const VARSAYILAN_MODELLER =
+  "gemini-3.7-flash,gemini-3-flash,gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite";
 
 // Tek model yetmiyor: biri kotayı doldurunca (429) ya da yoğunken (503) diğerine geç.
 // GEMINI_MODEL virgülle birden fazla model alır, sırayla denenir.
