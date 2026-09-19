@@ -7,17 +7,22 @@ import {
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
-// Sira KOTAYA gore: ucretsiz katmanda model basina gunde 20 istek var ve
-// dolan modelde istek 429 ile dusuyor, sadece zaman kaybettiriyor.
-// 2026-09-19'da 3.6 (31/20) ve 3.5 (30/20) dolmustu; her istek once o ikisinde
-// bosa gidip en zayif modele (flash-lite) dusuyordu. Yavaslik ve bozuk urun
-// adlarinin sebebi ayarlar degil buydu.
+// Sira, olculen performansa gore. gemini-3.6-flash bu fotograflarda HIGH
+// dusunme + ULTRA_HIGH cozunurlukle 42-45 sn'de bitiriyor ve isimleri dogru
+// veriyor; gemini-3.7-flash ayni isi 54 sn'de bitiremiyor.
+//
+// DIKKAT - kota: ucretsiz katmanda model basina gunde 20 istek var. 3.6 dolarsa
+// istek 429 ile dusup sonraki modele geciyor ve YAVASLIYOR. 2026-09-19'da tam
+// bu yasandi: 3.6 (31/20) ve 3.5 (30/20) dolunca sistem yavas modellere dustu,
+// sure asimina girdi ve "ayarlar bozuldu" gibi gorundu. Kota Pasifik gece
+// yarisi (TR saatiyle ~10:00) sifirlaniyor.
+// Kalan kotayi gormek icin: https://aistudio.google.com/rate-limit
 // flash-lite en sona: kotasi genis (gunde 500) ama tanima kalitesi dusuk.
 // Kimlikler API'den dogrulandi (ListModels): panelde "Gemini 3 Flash" yazan
 // modelin kimligi gemini-3-flash-preview; "gemini-3-flash" diye bir model yok
 // ve o isimle istek 404 dondurup tum zinciri dusuruyordu.
 const VARSAYILAN_MODELLER =
-  "gemini-3.7-flash,gemini-3.8-flash,gemini-3-flash-preview,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite";
+  "gemini-3.6-flash,gemini-3.7-flash,gemini-3.8-flash,gemini-3-flash-preview,gemini-3.5-flash,gemini-3.1-flash-lite";
 
 // Tek model yetmiyor: biri kotayı doldurunca (429) ya da yoğunken (503) diğerine geç.
 // GEMINI_MODEL virgülle birden fazla model alır, sırayla denenir.
@@ -116,8 +121,7 @@ const PROMPT = `Sen bir market rafı sayım asistanısın. Görseldeki ürünler
 - MARKA TAHMİN ETME. Ambalajda marka adını gerçekten okuyamıyorsan, ürün tanıdık bir markaya benziyor diye o markayı YAZMA; marka alanına "bilinmeyen" yaz. Yanlış marka yazmak, bilinmeyen yazmaktan çok daha kötü.
 - Türkiye'de marketlerin kendi markaları yaygındır (Migros'ta "M" logosu, ayrıca A101, BİM, ŞOK, Carrefour). Bunlar tanınmış markalara benzeyen ambalajlar kullanabilir. Üzerinde sadece "M" logosu ya da market adı görüyorsan markayı market adı olarak yaz, Nescafe/Tchibo/Jacobs gibi bir markaya atfetme.
 - Okuyamadığın ürünleri ELEME. Onlara ad olarak "bilinmeyen" yaz, marka olarak "bilinmeyen" yaz, emin_mi alanını "dusuk" yap ve not alanında neden okuyamadığını + görünüşünü yaz ("koyu renkli şişe, üzerinde parlama var, katın sağ ucunda" gibi).
-- BENZER GÖRÜNEN ÜRÜNLERİ AYNI VARSAYMA. Yan yana duran, aynı renk ve şekildeki ürünler farklı markalar olabilir; özellikle altın/kahverengi kavanozlar ve benzer ambalajlar birbirine çok benzer. Her ürünün etiketini TEK TEK oku, komşusuna bakarak karar verme. İki ürünü ancak ikisinin de etiketini okuyup aynı olduğunu gördüysen tek satırda topla.
-- Aynı katta, etiketini okuyup aynı olduğunu doğruladığın ürünleri tek satırda topla. Aynı ürün iki farklı kattaysa iki ayrı satır olur.
+- Aynı katta, aynı görünen ürünleri tek satırda topla. Aynı ürün iki farklı kattaysa iki ayrı satır olur.
 
 Kurallar:
 - Adetleri tek tek say, "yaklaşık şu kadar var" diye göz kararı yuvarlama yapma.
