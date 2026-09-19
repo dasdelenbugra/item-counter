@@ -255,14 +255,18 @@ export default function Sayfa() {
         <div className="kart">
           {yolo ? (
             <>
+              {/* Sayim ve tanima iki ayri modelin isi; ikisinin toplamini
+                  esit agirlikta yan yana koymak "hangisi dogru" sorusunu
+                  doguruyordu. Sayiyi tespit modeli veriyor, dil modeli
+                  yalnizca neyin ne oldugunu soyluyor. */}
               <div className="sayilar">
                 <div>
                   <span className="rakam">{yolo.toplam}</span>
-                  <span className="etiket">YOLO · tespit</span>
+                  <span className="etiket">rafta görünen ürün</span>
                 </div>
                 <div>
-                  <span className="rakam">{sonuc.toplam}</span>
-                  <span className="etiket">Gemini · tanıma</span>
+                  <span className="rakam">{cesit}</span>
+                  <span className="etiket">tanınan çeşit</span>
                 </div>
                 {yolo.bos_raf > 0 && (
                   <div>
@@ -272,13 +276,9 @@ export default function Sayfa() {
                 )}
               </div>
               <p className="alt bilgi">
-                İki model birbirinden bağımsız saydı.{" "}
-                {yolo.toplam === sonuc.toplam
-                  ? "Sonuçlar aynı."
-                  : "Aradaki fark " +
-                    Math.abs(yolo.toplam - sonuc.toplam) +
-                    " adet."}{" "}
-                Fotoğraftaki kutular YOLO&apos;nun saydıkları.
+                Adedi, fotoğraftaki her ürünü tek tek kutulayan tespit modeli
+                sayıyor — kutular görselin üstünde işaretli. Ürün ve marka
+                adlarını ayrı bir görsel dil modeli okuyor.
               </p>
               <button
                 type="button"
