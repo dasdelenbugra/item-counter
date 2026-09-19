@@ -37,9 +37,14 @@ const DUSUNME_SEVIYELERI: Record<string, ThinkingLevel> = {
   MEDIUM: ThinkingLevel.MEDIUM,
   HIGH: ThinkingLevel.HIGH,
 };
+// Kullanıcı hızdansa doğruluğu seçti. Aynı fotoğrafta raf 1 ölçümü:
+//   MEDIUM : 12.8 sn, "Nescafe Gold x3" (yandaki Tchibo'ları da Nescafe sayıyor)
+//   HIGH   : 34.9 sn, "Nescafe Gold x2" (Nescafe adedi doğru)
+// HIGH yavaş ama sayıyı doğru veriyor; zaman aşımı da artık çökmeye değil
+// "isimler eksik" durumuna düşürüyor, yani yavaşlığın bedeli sınırlı.
 const DUSUNME =
   DUSUNME_SEVIYELERI[process.env.GEMINI_THINKING?.trim().toUpperCase() ?? ""] ??
-  ThinkingLevel.MEDIUM;
+  ThinkingLevel.HIGH;
 
 // Görsel çözünürlüğü süreyi düşünme seviyesi kadar etkiliyor: fotoğraf
 // 1500x2000 ve ULTRA_HIGH'da her karesi ayrıntılı işleniyor.
@@ -61,7 +66,10 @@ const COZUNURLUK =
 // Vercel 60 sn'de kesiyor, yani beklemeye devam etmek tüm isteği çöpe atıyor.
 // Bu süreyi aşarsa vazgeçiyoruz; YOLO'nun kutuları zaten hazır olduğu için
 // kullanıcı sayımı ve kutuları yine görüyor, sadece ürün adları eksik kalıyor.
-const ZAMAN_ASIMI_MS = Number(process.env.GEMINI_ZAMAN_ASIMI_MS ?? 38_000);
+// HIGH düşünmede süre 35 sn civarı; 38 sn sınır çoğu isteği keserdi.
+// 50 sn'de kesiyoruz: Vercel'in 60 sn'sine 10 sn pay kalıyor ve aşılırsa
+// kullanıcı hata değil, "kutular var isimler yok" ekranı görüyor.
+const ZAMAN_ASIMI_MS = Number(process.env.GEMINI_ZAMAN_ASIMI_MS ?? 50_000);
 
 export class GeminiZamanAsimi extends Error {
   constructor() {
@@ -95,7 +103,8 @@ const PROMPT = `Sen bir market rafı sayım asistanısın. Görseldeki ürünler
 - MARKA TAHMİN ETME. Ambalajda marka adını gerçekten okuyamıyorsan, ürün tanıdık bir markaya benziyor diye o markayı YAZMA; marka alanına "bilinmeyen" yaz. Yanlış marka yazmak, bilinmeyen yazmaktan çok daha kötü.
 - Türkiye'de marketlerin kendi markaları yaygındır (Migros'ta "M" logosu, ayrıca A101, BİM, ŞOK, Carrefour). Bunlar tanınmış markalara benzeyen ambalajlar kullanabilir. Üzerinde sadece "M" logosu ya da market adı görüyorsan markayı market adı olarak yaz, Nescafe/Tchibo/Jacobs gibi bir markaya atfetme.
 - Okuyamadığın ürünleri ELEME. Onlara ad olarak "bilinmeyen" yaz, marka olarak "bilinmeyen" yaz, emin_mi alanını "dusuk" yap ve not alanında neden okuyamadığını + görünüşünü yaz ("koyu renkli şişe, üzerinde parlama var, katın sağ ucunda" gibi).
-- Aynı katta, aynı görünen ürünleri tek satırda topla. Aynı ürün iki farklı kattaysa iki ayrı satır olur.
+- BENZER GÖRÜNEN ÜRÜNLERİ AYNI VARSAYMA. Yan yana duran, aynı renk ve şekildeki ürünler farklı markalar olabilir; özellikle altın/kahverengi kavanozlar ve benzer ambalajlar birbirine çok benzer. Her ürünün etiketini TEK TEK oku, komşusuna bakarak karar verme. İki ürünü ancak ikisinin de etiketini okuyup aynı olduğunu gördüysen tek satırda topla.
+- Aynı katta, etiketini okuyup aynı olduğunu doğruladığın ürünleri tek satırda topla. Aynı ürün iki farklı kattaysa iki ayrı satır olur.
 
 Kurallar:
 - Adetleri tek tek say, "yaklaşık şu kadar var" diye göz kararı yuvarlama yapma.
