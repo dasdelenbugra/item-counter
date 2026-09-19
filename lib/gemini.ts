@@ -13,8 +13,11 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 // bosa gidip en zayif modele (flash-lite) dusuyordu. Yavaslik ve bozuk urun
 // adlarinin sebebi ayarlar degil buydu.
 // flash-lite en sona: kotasi genis (gunde 500) ama tanima kalitesi dusuk.
+// Kimlikler API'den dogrulandi (ListModels): panelde "Gemini 3 Flash" yazan
+// modelin kimligi gemini-3-flash-preview; "gemini-3-flash" diye bir model yok
+// ve o isimle istek 404 dondurup tum zinciri dusuruyordu.
 const VARSAYILAN_MODELLER =
-  "gemini-3.7-flash,gemini-3-flash,gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite";
+  "gemini-3.7-flash,gemini-3.8-flash,gemini-3-flash-preview,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite";
 
 // Tek model yetmiyor: biri kotayı doldurunca (429) ya da yoğunken (503) diğerine geç.
 // GEMINI_MODEL virgülle birden fazla model alır, sırayla denenir.
