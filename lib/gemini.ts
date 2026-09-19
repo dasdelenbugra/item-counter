@@ -41,6 +41,33 @@ const DUSUNME =
   DUSUNME_SEVIYELERI[process.env.GEMINI_THINKING?.trim().toUpperCase() ?? ""] ??
   ThinkingLevel.MEDIUM;
 
+// Görsel çözünürlüğü süreyi düşünme seviyesi kadar etkiliyor: fotoğraf
+// 1500x2000 ve ULTRA_HIGH'da her karesi ayrıntılı işleniyor.
+const COZUNURLUKLER: Record<string, PartMediaResolutionLevel> = {
+  MEDIUM: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
+  HIGH: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH,
+  ULTRA_HIGH: PartMediaResolutionLevel.MEDIA_RESOLUTION_ULTRA_HIGH,
+};
+// Ölçümde ULTRA_HIGH ile MEDIUM arasında süre farkı yok (17.5 vs 19.9 sn) ama
+// MEDIUM, Migros'un "M" logosunu okuyabildi. Detay kaybı sayımı etkilemiyor,
+// çünkü sayan model YOLO.
+const COZUNURLUK =
+  COZUNURLUKLER[process.env.GEMINI_COZUNURLUK?.trim().toUpperCase() ?? ""] ??
+  PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM;
+
+// Gemini'nin süresi çok oynak: aynı fotoğrafta 12 sn de sürüyor 58 sn de.
+// Vercel 60 sn'de kesiyor, yani beklemeye devam etmek tüm isteği çöpe atıyor.
+// Bu süreyi aşarsa vazgeçiyoruz; YOLO'nun kutuları zaten hazır olduğu için
+// kullanıcı sayımı ve kutuları yine görüyor, sadece ürün adları eksik kalıyor.
+const ZAMAN_ASIMI_MS = Number(process.env.GEMINI_ZAMAN_ASIMI_MS ?? 38_000);
+
+export class GeminiZamanAsimi extends Error {
+  constructor() {
+    super("Gemini zamanında cevap vermedi, ürün adları alınamadı");
+    this.name = "GeminiZamanAsimi";
+  }
+}
+
 export type RafUrunu = {
   raf: number;
   ad: string;
@@ -147,10 +174,7 @@ function istek(base64: string, mimeType: string, model: string) {
         parts: [
           {
             inlineData: { mimeType, data: base64 },
-            // küçük ürünlerin okunabilmesi için en yüksek çözünürlükte işle
-            mediaResolution: {
-              level: PartMediaResolutionLevel.MEDIA_RESOLUTION_ULTRA_HIGH,
-            },
+            mediaResolution: { level: COZUNURLUK },
           },
           { text: PROMPT },
         ],
@@ -181,14 +205,29 @@ export async function rafiAnalizEt(
     throw new Error(`Model listesi boş. GEMINI_MODEL'i sil ya da şöyle doldur: ${VARSAYILAN_MODELLER}`);
   }
 
+  // Sınır tüm deneme zincirine konuyor, tek isteğe değil: iki model sırayla
+  // denenirken toplam süre yine 60 sn'yi aşabilirdi.
+  const bitis = Date.now() + ZAMAN_ASIMI_MS;
+  const kalanSureyleYaris = <T,>(is_: Promise<T>): Promise<T> =>
+    Promise.race([
+      is_,
+      new Promise<never>((_, hata) =>
+        setTimeout(() => hata(new GeminiZamanAsimi()), Math.max(0, bitis - Date.now())),
+      ),
+    ]);
+
   let sonHata: unknown;
 
   for (const model of MODELLER) {
     try {
-      const res = await tekrarDene(() => istek(base64, mimeType, model));
+      const res = await kalanSureyleYaris(
+        tekrarDene(() => istek(base64, mimeType, model)),
+      );
       const json = JSON.parse(res.text ?? "{}");
       return json.urunler ?? [];
     } catch (e) {
+      // Süre doldu: sıradaki modeli denemenin anlamı yok, zaten geç kaldık.
+      if (e instanceof GeminiZamanAsimi) throw e;
       const kod = hataGovdesi(e)?.code;
       // kota dolu ya da model yogun: sıradaki modeli dene.
       // diğer hatalar (geçersiz anahtar, bozuk istek) model değiştirmekle geçmez

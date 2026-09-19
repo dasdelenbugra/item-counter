@@ -1,4 +1,4 @@
-import { rafiAnalizEt } from "@/lib/gemini";
+import { rafiAnalizEt, type RafUrunu } from "@/lib/gemini";
 import { yoloVarMi, yoloylaSay, type YoloSonuc } from "@/lib/yolo";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -35,12 +35,6 @@ export async function POST(req: NextRequest) {
     ]);
     const sure_ms = Date.now() - baslangic;
 
-    // Gemini asıl iş: o düşerse istek başarısız sayılır.
-    if (geminiSonuc.status === "rejected") throw geminiSonuc.reason;
-
-    const urunler = geminiSonuc.value;
-    const toplam = urunler.reduce((t, u) => t + u.adet, 0);
-
     let yolo: YoloSonuc | null = null;
     let yolo_hata: string | null = null;
     if (yoloSonuc.status === "fulfilled") {
@@ -54,7 +48,32 @@ export async function POST(req: NextRequest) {
       console.error("YOLO:", yoloSonuc.reason);
     }
 
-    return NextResponse.json({ urunler, toplam, sure_ms, yolo, yolo_hata });
+    // Gemini gecikirse ya da düşerse isteği tamamen çöpe atma: YOLO'nun
+    // sayımı ve kutuları hazır, kullanıcı onları görsün. Yalnızca ikisi
+    // birden başarısızsa hata dönüyoruz.
+    let urunler: RafUrunu[] = [];
+    let gemini_hata: string | null = null;
+    if (geminiSonuc.status === "fulfilled") {
+      urunler = geminiSonuc.value;
+    } else {
+      if (!yolo) throw geminiSonuc.reason;
+      gemini_hata =
+        geminiSonuc.reason instanceof Error
+          ? geminiSonuc.reason.message
+          : "ürün adları alınamadı";
+      console.error("Gemini:", geminiSonuc.reason);
+    }
+
+    const toplam = urunler.reduce((t, u) => t + u.adet, 0);
+
+    return NextResponse.json({
+      urunler,
+      toplam,
+      sure_ms,
+      yolo,
+      yolo_hata,
+      gemini_hata,
+    });
   } catch (e) {
     console.error(e);
     return NextResponse.json(

@@ -11,6 +11,7 @@ type Sonuc = {
   sure_ms: number;
   yolo: YoloSonuc | null;
   yolo_hata: string | null;
+  gemini_hata: string | null;
 };
 
 // Telefon fotoğrafı 8 MB ve HEIC gelebiliyor. Göndermeden önce JPEG'e çevirip
@@ -295,6 +296,13 @@ export default function Sayfa() {
             </p>
           )}
 
+          {sonuc.gemini_hata && (
+            <p className="alt bilgi hata">
+              Ürün adları alınamadı ({sonuc.gemini_hata}). Sayım ve kutular
+              geçerli; tekrar denersen isimler de gelir.
+            </p>
+          )}
+
           {sonuc.yolo_hata && (
             <p className="alt bilgi hata">
               YOLO servisi cevap vermedi ({sonuc.yolo_hata}). Sayım Gemini&apos;den.
@@ -306,6 +314,7 @@ export default function Sayfa() {
             değildir. · {cesit} çeşit · {(sonuc.sure_ms / 1000).toFixed(1)} sn
           </p>
 
+          {sonuc.urunler.length > 0 && (
           <table>
             <thead>
               <tr>
@@ -328,10 +337,11 @@ export default function Sayfa() {
               ))}
             </tbody>
           </table>
+          )}
         </div>
       )}
 
-      {sonuc && karsilastirma.length > 0 && (
+      {sonuc && sonuc.urunler.length > 0 && karsilastirma.length > 0 && (
         <div className="kart">
           <h2>Sistemle karşılaştırma</h2>
           <p className="alt bilgi">
