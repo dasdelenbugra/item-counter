@@ -138,41 +138,58 @@ if ($Atla) {
     $eskiTercih = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
+        # HICBIR vercel cagrisi sinirsiz beklememeli. Bir kez betik
+        # "Vercel guncelleniyor..." satirinda 10 dakika asili kaldi; npx
+        # gorunmez bir soruda bekliyordu ve cikti gizli oldugu icin fark
+        # edilemiyordu. Artik her cagri ayri surecte, sert sure siniriyla ve
+        # ciktisi dosyaya yazilarak calisiyor.
+        $gLog = Join-Path $env:TEMP "vercel-cikti.txt"
+
+        function VercelCalistir {
+            param([string]$Komut, [int]$SaniyeSinir = 120, [string]$GirdiDosyasi = $null)
+
+            $yonlendirme = if ($GirdiDosyasi) { "< `"$GirdiDosyasi`"" } else { "" }
+            $p = Start-Process -FilePath "cmd.exe" -PassThru -WindowStyle Hidden `
+                -ArgumentList "/c", "npx --yes vercel $Komut $yonlendirme > `"$gLog`" 2>&1"
+
+            if (-not $p.WaitForExit($SaniyeSinir * 1000)) {
+                try { $p.Kill() } catch {}
+                return @{ Basarili = $false; Cikti = "sure asimi ($SaniyeSinir sn)" }
+            }
+            $c = if (Test-Path $gLog) { Get-Content $gLog -Raw } else { "" }
+            return @{ Basarili = ($p.ExitCode -eq 0); Cikti = $c }
+        }
+
         # Ayni isimde ikinci degisken eklenemiyor, once eskisini sil.
         # Degisken yoksa hata verir, onemli degil.
-        npx --yes vercel env rm YOLO_URL production --yes *> $null
+        VercelCalistir -Komut "env rm YOLO_URL production --yes" -SaniyeSinir 60 | Out-Null
 
         # Buradan sonrasi kritik: silme basarili olup ekleme basarisiz olursa
         # Production degiskensiz kalir ve uygulama kutusuz calisir, yani betik
-        # durumu ESKISINDEN KOTU yapar. Bir kez bu yasandi; o yuzden hem
-        # tekrar deniyoruz hem de gercekten yazildigini dogruluyoruz.
-        # PowerShell'den npx'e BORU ILE veri gondermek guvenilir degil: komut
-        # veriyi almiyor, sessizce "degeri gir" diye soruyor ve cikti gizli
-        # oldugu icin betik sonsuza kadar asili kaliyor (bir kez 5 dakika
-        # beklendi). Cozum: degeri dosyaya yazip cmd'nin "<" yonlendirmesini
-        # kullanmak, ustune de sert bir sure siniri koymak.
+        # durumu ESKISINDEN KOTU yapar.
+        #
+        # Ayrica PowerShell'den npx'e BORU ILE deger gondermek calismiyor;
+        # deger gecici dosyaya yazilip cmd'nin "<" yonlendirmesiyle veriliyor.
         $gecici = Join-Path $env:TEMP "yolo-url.txt"
         [System.IO.File]::WriteAllText($gecici, $adres)
 
         $yazildi = $false
         for ($d = 1; $d -le 3 -and -not $yazildi; $d++) {
-            $p = Start-Process -FilePath "cmd.exe" -PassThru -WindowStyle Hidden `
-                -ArgumentList "/c", "npx --yes vercel env add YOLO_URL production < `"$gecici`" > nul 2>&1"
-            if (-not $p.WaitForExit(90000)) {
-                $p.Kill()
-                Yaz "  komut 90 sn'de bitmedi, kesildi ($d/3)" DarkGray
-            }
+            VercelCalistir -Komut "env add YOLO_URL production" -SaniyeSinir 90 -GirdiDosyasi $gecici | Out-Null
+
             # Gercekten yazildi mi: ciktiya degil listeye bakiyoruz.
-            $liste = (npx --yes vercel env ls 2>&1 | Out-String)
-            if ($liste -match "YOLO_URL\s+\S+\s+\S+\s+[^\r\n]*Production") { $yazildi = $true }
-            elseif ($d -lt 3) { Yaz "  yazilamadi, tekrar deneniyor ($d/3)..." DarkGray; Start-Sleep -Seconds 3 }
+            $liste = VercelCalistir -Komut "env ls" -SaniyeSinir 60
+            # Ciktida "YOLO_URL ... Production" satiri var mi:
+            $yazildi = [bool](($liste.Cikti -split "`n") |
+                Where-Object { $_ -match "YOLO_URL" -and $_ -match "Production" })
+            if (-not $yazildi -and $d -lt 3) { Yaz "  yazilamadi, tekrar deneniyor ($d/3)..." DarkGray; Start-Sleep -Seconds 3 }
         }
         Remove-Item $gecici -ErrorAction SilentlyContinue
         if (-not $yazildi) { throw "YOLO_URL Production'a yazilamadi" }
 
-        Yaz "Yeniden yayinlaniyor (40-60 sn)..." Cyan
-        $cikti = (npx --yes vercel deploy --prod --yes 2>&1 | Out-String)
-        if ($LASTEXITCODE -ne 0) { throw "yayin basarisiz" }
+        Yaz "Yeniden yayinlaniyor (40-90 sn)..." Cyan
+        $yayin = VercelCalistir -Komut "deploy --prod --yes" -SaniyeSinir 180
+        if (-not $yayin.Basarili) { throw "yayin basarisiz: $($yayin.Cikti -replace '\s+', ' ')" }
 
         Yaz "Vercel guncellendi." Green
     } catch {
