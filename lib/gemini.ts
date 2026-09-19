@@ -6,12 +6,16 @@ import {
 } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+
+const VARSAYILAN_MODELLER = "gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite";
+
 // Tek model yetmiyor: biri kotayı doldurunca (429) ya da yoğunken (503) diğerine geç.
 // GEMINI_MODEL virgülle birden fazla model alır, sırayla denenir.
-const MODELLER = (
-  process.env.GEMINI_MODEL ??
-  "gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite"
-)
+//
+// `??` yerine boşluk kontrolü: Vercel'de değişkeni boş değerle tanımlamak
+// mümkün ve `??` boş metinde varsayılana DÜŞMÜYOR. O durumda liste boşalıyor,
+// döngü hiç çalışmıyor ve kullanıcıya "undefined" diye bir hata dönüyordu.
+const MODELLER = (process.env.GEMINI_MODEL?.trim() || VARSAYILAN_MODELLER)
   .split(",")
   .map((m) => m.trim())
   .filter(Boolean);
@@ -143,6 +147,18 @@ export async function rafiAnalizEt(
   base64: string,
   mimeType: string,
 ): Promise<RafUrunu[]> {
+  // Yapılandırma hataları sunucuda sessizce garip hatalara dönüşüyor;
+  // burada erkenden ne eksik olduğunu söyle.
+  if (!process.env.GEMINI_API_KEY?.trim()) {
+    throw new Error(
+      "GEMINI_API_KEY tanımlı değil. Vercel'de Settings > Environment Variables " +
+        "altına ekleyip yeniden yayınla (Redeploy).",
+    );
+  }
+  if (MODELLER.length === 0) {
+    throw new Error(`Model listesi boş. GEMINI_MODEL'i sil ya da şöyle doldur: ${VARSAYILAN_MODELLER}`);
+  }
+
   let sonHata: unknown;
 
   for (const model of MODELLER) {
