@@ -66,10 +66,11 @@ const COZUNURLUK =
 // Vercel 60 sn'de kesiyor, yani beklemeye devam etmek tüm isteği çöpe atıyor.
 // Bu süreyi aşarsa vazgeçiyoruz; YOLO'nun kutuları zaten hazır olduğu için
 // kullanıcı sayımı ve kutuları yine görüyor, sadece ürün adları eksik kalıyor.
-// HIGH düşünmede süre 35 sn civarı; 38 sn sınır çoğu isteği keserdi.
-// 50 sn'de kesiyoruz: Vercel'in 60 sn'sine 10 sn pay kalıyor ve aşılırsa
-// kullanıcı hata değil, "kutular var isimler yok" ekranı görüyor.
-const ZAMAN_ASIMI_MS = Number(process.env.GEMINI_ZAMAN_ASIMI_MS ?? 50_000);
+// HIGH düşünmede süre 34-51 sn arasında gidip geliyor. 50 sn sınır, 51 sn
+// süren isteği kıl payı kesiyordu; 54'e çekildi. Geri kalan işler (YOLO
+// paralel, dosya okuma, JSON) 2-3 sn, yani Vercel'in 60 sn'sine hâlâ pay var.
+// Sınır aşılırsa kullanıcı hata değil, "kutular var isimler yok" ekranı görüyor.
+const ZAMAN_ASIMI_MS = Number(process.env.GEMINI_ZAMAN_ASIMI_MS ?? 54_000);
 
 export class GeminiZamanAsimi extends Error {
   constructor() {
