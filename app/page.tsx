@@ -16,8 +16,8 @@ type Sonuc = {
 
 // Telefon fotoğrafı 8 MB ve HEIC gelebiliyor. Göndermeden önce JPEG'e çevirip
 // küçültüyoruz: sunucuya hep aynı tip gelir, mobil veriyle yükleme hızlanır.
-// 2560'ın altına inme; ambalaj yazıları ULTRA_HIGH çözünürlükte okunuyor,
-// fazla küçültmek o kazanımı geri alır.
+// 2560'ın altına inme: marka adının ambalajdan okunabilmesi buna bağlı.
+// Sayımı YOLO yapıyor, ama yanlış marka göstermek sunumda göze batıyor.
 const UZUN_KENAR = 2560;
 const KALITE = 0.85;
 
