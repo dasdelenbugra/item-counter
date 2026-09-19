@@ -63,6 +63,8 @@ const PROMPT = `Sen bir market rafı sayım asistanısın. Görseldeki ürünler
 
 2. Adım - TANIMA:
 - Ambalajdaki yazıyı okuyabiliyorsan ürün adını ve markayı ambalajdaki gibi yaz (gramaj görünüyorsa ekle).
+- MARKA TAHMİN ETME. Ambalajda marka adını gerçekten okuyamıyorsan, ürün tanıdık bir markaya benziyor diye o markayı YAZMA; marka alanına "bilinmeyen" yaz. Yanlış marka yazmak, bilinmeyen yazmaktan çok daha kötü.
+- Türkiye'de marketlerin kendi markaları yaygındır (Migros'ta "M" logosu, ayrıca A101, BİM, ŞOK, Carrefour). Bunlar tanınmış markalara benzeyen ambalajlar kullanabilir. Üzerinde sadece "M" logosu ya da market adı görüyorsan markayı market adı olarak yaz, Nescafe/Tchibo/Jacobs gibi bir markaya atfetme.
 - Okuyamadığın ürünleri ELEME. Onlara ad olarak "bilinmeyen" yaz, marka olarak "bilinmeyen" yaz, emin_mi alanını "dusuk" yap ve not alanında neden okuyamadığını + görünüşünü yaz ("koyu renkli şişe, üzerinde parlama var, katın sağ ucunda" gibi).
 - Aynı katta, aynı görünen ürünleri tek satırda topla. Aynı ürün iki farklı kattaysa iki ayrı satır olur.
 
