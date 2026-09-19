@@ -142,8 +142,19 @@ if ($Atla) {
         # Degisken yoksa hata verir, onemli degil.
         npx --yes vercel env rm YOLO_URL production --yes *> $null
 
-        $adres | npx --yes vercel env add YOLO_URL production *> $null
-        if ($LASTEXITCODE -ne 0) { throw "YOLO_URL degiskeni yazilamadi" }
+        # Buradan sonrasi kritik: silme basarili olup ekleme basarisiz olursa
+        # Production degiskensiz kalir ve uygulama kutusuz calisir, yani betik
+        # durumu ESKISINDEN KOTU yapar. Bir kez bu yasandi; o yuzden hem
+        # tekrar deniyoruz hem de gercekten yazildigini dogruluyoruz.
+        $yazildi = $false
+        for ($d = 1; $d -le 3 -and -not $yazildi; $d++) {
+            $adres | npx --yes vercel env add YOLO_URL production *> $null
+            $liste = (npx --yes vercel env ls 2>&1 | Out-String)
+            # "YOLO_URL ... Production" satiri olusmus mu
+            if ($liste -match "YOLO_URL\s+\S+\s+\S+\s+[^\r\n]*Production") { $yazildi = $true }
+            elseif ($d -lt 3) { Yaz "  yazilamadi, tekrar deneniyor ($d/3)..." DarkGray; Start-Sleep -Seconds 3 }
+        }
+        if (-not $yazildi) { throw "YOLO_URL Production'a yazilamadi" }
 
         Yaz "Yeniden yayinlaniyor (40-60 sn)..." Cyan
         $cikti = (npx --yes vercel deploy --prod --yes 2>&1 | Out-String)
@@ -152,7 +163,13 @@ if ($Atla) {
         Yaz "Vercel guncellendi." Green
     } catch {
         Yaz " Vercel guncellenemedi: $($_.Exception.Message)" Red
-        Yaz " Adresi elle gir: Settings > Environment Variables > YOLO_URL, sonra Redeploy." White
+        Yaz "" White
+        Yaz " DIKKAT: Production'daki YOLO_URL silinmis olabilir. Bu haliyle" Red
+        Yaz " uygulama calisir ama KUTULAR GELMEZ. Elle duzeltmen gerekiyor:" Red
+        Yaz "   1) vercel.com > item-counter > Settings > Environment Variables" White
+        Yaz "   2) YOLO_URL ekle (Production isaretli):" White
+        Yaz "      $adres" Yellow
+        Yaz "   3) Deployments > en ustteki > ... > Redeploy" White
     } finally {
         $ErrorActionPreference = $eskiTercih
     }
