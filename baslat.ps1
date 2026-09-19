@@ -146,14 +146,28 @@ if ($Atla) {
         # Production degiskensiz kalir ve uygulama kutusuz calisir, yani betik
         # durumu ESKISINDEN KOTU yapar. Bir kez bu yasandi; o yuzden hem
         # tekrar deniyoruz hem de gercekten yazildigini dogruluyoruz.
+        # PowerShell'den npx'e BORU ILE veri gondermek guvenilir degil: komut
+        # veriyi almiyor, sessizce "degeri gir" diye soruyor ve cikti gizli
+        # oldugu icin betik sonsuza kadar asili kaliyor (bir kez 5 dakika
+        # beklendi). Cozum: degeri dosyaya yazip cmd'nin "<" yonlendirmesini
+        # kullanmak, ustune de sert bir sure siniri koymak.
+        $gecici = Join-Path $env:TEMP "yolo-url.txt"
+        [System.IO.File]::WriteAllText($gecici, $adres)
+
         $yazildi = $false
         for ($d = 1; $d -le 3 -and -not $yazildi; $d++) {
-            $adres | npx --yes vercel env add YOLO_URL production *> $null
+            $p = Start-Process -FilePath "cmd.exe" -PassThru -WindowStyle Hidden `
+                -ArgumentList "/c", "npx --yes vercel env add YOLO_URL production < `"$gecici`" > nul 2>&1"
+            if (-not $p.WaitForExit(90000)) {
+                $p.Kill()
+                Yaz "  komut 90 sn'de bitmedi, kesildi ($d/3)" DarkGray
+            }
+            # Gercekten yazildi mi: ciktiya degil listeye bakiyoruz.
             $liste = (npx --yes vercel env ls 2>&1 | Out-String)
-            # "YOLO_URL ... Production" satiri olusmus mu
             if ($liste -match "YOLO_URL\s+\S+\s+\S+\s+[^\r\n]*Production") { $yazildi = $true }
             elseif ($d -lt 3) { Yaz "  yazilamadi, tekrar deneniyor ($d/3)..." DarkGray; Start-Sleep -Seconds 3 }
         }
+        Remove-Item $gecici -ErrorAction SilentlyContinue
         if (-not $yazildi) { throw "YOLO_URL Production'a yazilamadi" }
 
         Yaz "Yeniden yayinlaniyor (40-60 sn)..." Cyan
