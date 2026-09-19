@@ -58,9 +58,11 @@ const COZUNURLUKLER: Record<string, PartMediaResolutionLevel> = {
 //   MEDIUM     : 14-16 sn, tutarlı ama cam kavanozdaki küçük yazıyı okuyamıyor
 //   HIGH       : 11.6-14.2 sn, tutarlı ve üç denemede de AYNI isimleri verdi
 // Detay kaybı sayımı etkilemiyor, çünkü sayan model YOLO.
+// Kullanıcı ilk ayara dönmeyi seçti: yavaş ama isimleri doğru veren hali.
+// HIGH/MEDIUM hız kazandırıyor ama cam kavanozlardaki markaları karıştırıyor.
 const COZUNURLUK =
   COZUNURLUKLER[process.env.GEMINI_COZUNURLUK?.trim().toUpperCase() ?? ""] ??
-  PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH;
+  PartMediaResolutionLevel.MEDIA_RESOLUTION_ULTRA_HIGH;
 
 // Gemini'nin süresi çok oynak: aynı fotoğrafta 12 sn de sürüyor 58 sn de.
 // Vercel 60 sn'de kesiyor, yani beklemeye devam etmek tüm isteği çöpe atıyor.
