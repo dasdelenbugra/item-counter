@@ -175,6 +175,13 @@ function anlasilirHata(e: unknown): Error {
   }
   if (govde?.code === 503)
     return new Error("Gemini şu an yoğun, birazdan tekrar dene.");
+  // 402: hesabın faturalandırma/kredi sorunu. Ham İngilizce mesajı ekrana
+  // basmak sunum sırasında kötü görünüyor; ne olduğunu tek cümleyle söyle.
+  if (govde?.code === 402)
+    return new Error(
+      "Ürün tanıma servisi hesap kotası nedeniyle geçici olarak kapalı. " +
+        "Sayım ve kutular etkilenmiyor.",
+    );
   if (govde?.message) return new Error(govde.message);
   return e instanceof Error ? e : new Error(String(e));
 }
