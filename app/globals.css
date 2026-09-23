@@ -143,31 +143,6 @@ button:disabled {
   font-size: 12px;
 }
 
-h2 {
-  font-size: 1.05rem;
-  margin: 0 0 0.25rem;
-}
-
-.rozet {
-  display: inline-block;
-  margin-left: 0.4rem;
-  padding: 0.05rem 0.4rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--muted);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.rozet.uyari {
-  border-color: #e0553f;
-  color: #e0553f;
-}
-
-.eksi {
-  color: #e0553f;
-}
-
 table {
   width: 100%;
   border-collapse: collapse;

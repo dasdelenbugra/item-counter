@@ -1,17 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { RafUrunu } from "@/lib/gemini";
-import { karsilastir } from "@/lib/stok";
-import type { YoloSonuc } from "@/lib/yolo";
+import { yoloyuHazirla, yoloylaSay, type YoloSonuc } from "@/lib/yolo";
 
-type Sonuc = {
+type GeminiSonuc = {
   urunler: RafUrunu[];
   toplam: number;
   sure_ms: number;
-  yolo: YoloSonuc | null;
-  yolo_hata: string | null;
-  gemini_hata: string | null;
 };
 
 // Telefon fotoğrafı 8 MB ve HEIC gelebiliyor. Göndermeden önce JPEG'e çevirip
@@ -99,7 +95,12 @@ export default function Sayfa() {
   const [onizleme, setOnizleme] = useState<string | null>(null);
   const [hazirlaniyor, setHazirlaniyor] = useState(false);
   const [yukleniyor, setYukleniyor] = useState(false);
-  const [sonuc, setSonuc] = useState<Sonuc | null>(null);
+  // Sayım (tarayıcıda YOLO) ve tanıma (sunucuda Gemini) ayrı ayrı gelir:
+  // YOLO birkaç saniyede biter, Gemini 30-50 sn sürer.
+  const [yolo, setYolo] = useState<YoloSonuc | null>(null);
+  const [yoloHata, setYoloHata] = useState<string | null>(null);
+  const [gemini, setGemini] = useState<GeminiSonuc | null>(null);
+  const [geminiHata, setGeminiHata] = useState<string | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [kutulariGoster, setKutulariGoster] = useState(true);
 
@@ -113,9 +114,11 @@ export default function Sayfa() {
     e.target.value = "";
     if (!ham) return;
 
-    setSonuc(null);
-    setHata(null);
+    sonuclariTemizle();
     setHazirlaniyor(true);
+    // Model 38 MB; "Say"a basılana kadar arka planda insin. Hata olursa
+    // gönderirken tekrar denenecek, burada yutmak yeterli.
+    yoloyuHazirla().catch(() => {});
 
     try {
       const jpeg = await jpegeCevir(ham);
@@ -133,43 +136,60 @@ export default function Sayfa() {
     }
   }
 
+  function sonuclariTemizle() {
+    setYolo(null);
+    setYoloHata(null);
+    setGemini(null);
+    setGeminiHata(null);
+    setHata(null);
+  }
+
+  async function yoloCalistir(foto: File) {
+    const kaynak = await createImageBitmap(foto);
+    try {
+      setYolo(await yoloylaSay(kaynak, kaynak.width, kaynak.height));
+    } finally {
+      kaynak.close();
+    }
+  }
+
+  async function geminiCalistir(foto: File) {
+    const form = new FormData();
+    form.append("foto", foto);
+    const res = await fetch("/api/say", { method: "POST", body: form });
+    const veri = await res.json();
+    if (!res.ok) throw new Error(veri.hata ?? "istek başarısız");
+    setGemini(veri as GeminiSonuc);
+  }
+
   async function gonder(e: React.FormEvent) {
     e.preventDefault();
     if (!dosya) return;
 
     setYukleniyor(true);
-    setHata(null);
-    setSonuc(null);
+    sonuclariTemizle();
 
-    try {
-      const form = new FormData();
-      form.append("foto", dosya);
+    // İkisi paralel ve birbirinden bağımsız: biri düşerse diğerinin sonucu
+    // yine gösterilir. Yalnızca ikisi birden düşerse hata ekranı çıkar.
+    const [y, g] = await Promise.allSettled([
+      yoloCalistir(dosya),
+      geminiCalistir(dosya),
+    ]);
+    const mesaj = (r: PromiseRejectedResult) =>
+      r.reason instanceof Error ? r.reason.message : "bilinmeyen hata";
 
-      const res = await fetch("/api/say", { method: "POST", body: form });
-      const veri = await res.json();
-
-      if (!res.ok) throw new Error(veri.hata ?? "istek başarısız");
-      setSonuc(veri as Sonuc);
-    } catch (err) {
-      setHata(err instanceof Error ? err.message : "bilinmeyen hata");
-    } finally {
-      setYukleniyor(false);
+    if (y.status === "rejected") {
+      console.error("YOLO:", y.reason);
+      setYoloHata(mesaj(y));
     }
+    if (g.status === "rejected") setGeminiHata(mesaj(g));
+    if (y.status === "rejected" && g.status === "rejected") setHata(mesaj(g));
+    setYukleniyor(false);
   }
 
-  const yolo = sonuc?.yolo ?? null;
-  const cesit = sonuc
-    ? new Set(sonuc.urunler.map((u) => u.marka + " " + u.ad)).size
-    : 0;
-
-  const karsilastirma = useMemo(
-    () => (sonuc ? karsilastir(sonuc.urunler) : []),
-    [sonuc],
-  );
-  const raftaYok = karsilastirma.filter((s) => s.durum === "rafta_yok").length;
-  const farkli = karsilastirma.filter(
-    (s) => s.durum === "eslesti" && s.fark !== 0,
-  ).length;
+  const sonucVar = Boolean(yolo || gemini);
+  const urunler = gemini?.urunler ?? [];
+  const cesit = new Set(urunler.map((u) => u.marka + " " + u.ad)).size;
 
   return (
     <main>
@@ -252,7 +272,7 @@ export default function Sayfa() {
 
       {hata && <p className="kart hata">Hata: {hata}</p>}
 
-      {sonuc && (
+      {sonucVar && !hata && (
         <div className="kart">
           {yolo ? (
             <>
@@ -291,30 +311,35 @@ export default function Sayfa() {
             </>
           ) : (
             <p className="alt">
-              Toplam <strong>{sonuc.toplam}</strong> adet · {cesit} çeşit ·{" "}
-              {(sonuc.sure_ms / 1000).toFixed(1)} sn
+              Toplam <strong>{gemini?.toplam ?? 0}</strong> adet · {cesit} çeşit ·{" "}
+              {((gemini?.sure_ms ?? 0) / 1000).toFixed(1)} sn
             </p>
           )}
 
-          {sonuc.gemini_hata && (
+          {!gemini && !geminiHata && (
+            <p className="alt bilgi">Ürün adları okunuyor, bu 30-50 sn sürebilir…</p>
+          )}
+
+          {geminiHata && (
             <p className="alt bilgi hata">
-              Ürün adları alınamadı ({sonuc.gemini_hata}). Sayım ve kutular
-              geçerli; tekrar denersen isimler de gelir.
+              Ürün adları alınamadı ({geminiHata}). Sayım ve kutular geçerli.
             </p>
           )}
 
-          {sonuc.yolo_hata && (
+          {yoloHata && (
             <p className="alt bilgi hata">
-              YOLO servisi cevap vermedi ({sonuc.yolo_hata}). Sayım Gemini&apos;den.
+              Sayım modeli çalışmadı ({yoloHata}). Adetler Gemini&apos;den.
             </p>
           )}
 
-          <p className="alt bilgi">
-            Sadece fotoğrafta görünen ön yüzler sayılır, arka sıralar sayıma dahil
-            değildir. · {cesit} çeşit · {(sonuc.sure_ms / 1000).toFixed(1)} sn
-          </p>
+          {gemini && (
+            <p className="alt bilgi">
+              Sadece fotoğrafta görünen ön yüzler sayılır, arka sıralar sayıma
+              dahil değildir. · {cesit} çeşit · {(gemini.sure_ms / 1000).toFixed(1)} sn
+            </p>
+          )}
 
-          {sonuc.urunler.length > 0 && (
+          {urunler.length > 0 && (
           <table>
             <thead>
               <tr>
@@ -326,7 +351,7 @@ export default function Sayfa() {
               </tr>
             </thead>
             <tbody>
-              {sonuc.urunler.map((u, i) => (
+              {urunler.map((u, i) => (
                 <tr key={i} title={u.not}>
                   <td>{u.raf}</td>
                   <td>{u.ad}</td>
@@ -338,57 +363,6 @@ export default function Sayfa() {
             </tbody>
           </table>
           )}
-        </div>
-      )}
-
-      {sonuc && sonuc.urunler.length > 0 && karsilastirma.length > 0 && (
-        <div className="kart">
-          <h2>Sistemle karşılaştırma</h2>
-          <p className="alt bilgi">
-            {raftaYok > 0 && (
-              <>
-                <strong>{raftaYok}</strong> kalem sistemde kayıtlı ama rafta
-                görünmüyor.{" "}
-              </>
-            )}
-            {farkli > 0 && (
-              <>
-                <strong>{farkli}</strong> kalemde adet farkı var.{" "}
-              </>
-            )}
-            Rafta görünen sayı, sistemdeki stoktan azdır: arka sıralar
-            fotoğrafta görünmez.
-          </p>
-          <table>
-            <thead>
-              <tr>
-                <th>Ürün</th>
-                <th>Sistem</th>
-                <th>Rafta</th>
-                <th>Fark</th>
-              </tr>
-            </thead>
-            <tbody>
-              {karsilastirma.map((s, i) => (
-                <tr key={i}>
-                  <td>
-                    {s.marka} {s.ad}
-                    {s.durum === "rafta_yok" && (
-                      <span className="rozet uyari">rafta yok</span>
-                    )}
-                    {s.durum === "sistemde_yok" && (
-                      <span className="rozet">sistemde yok</span>
-                    )}
-                  </td>
-                  <td>{s.sistem ?? "—"}</td>
-                  <td>{s.rafta ?? "—"}</td>
-                  <td className={s.fark && s.fark < 0 ? "eksi" : undefined}>
-                    {s.fark === null ? "—" : s.fark > 0 ? `+${s.fark}` : s.fark}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
     </main>
