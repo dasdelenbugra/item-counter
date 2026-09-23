@@ -14,7 +14,7 @@ because every try uses the project's Gemini quota.
 
 <p>
   <img src="docs/screenshots/detection.jpg" alt="Every product on the shelf marked with a box" width="48%">
-  <img src="docs/screenshots/products.png" alt="Total count and recognized products" width="48%">
+  <img src="docs/screenshots/phone.jpg" alt="Total count and recognized products on a phone" width="42%">
 </p>
 
 ## How it works
